@@ -1,0 +1,31 @@
+{
+  "_README": "Copy this file to meta-tokens.local.json and fill in real values. The .local.json suffix is gitignored. Never commit the real one.",
+  "app_id": "REPLACE_WITH_META_APP_ID",
+  "app_secret": "REPLACE_WITH_APP_SECRET",
+  "system_user_token": "REPLACE_WITH_LONG_LIVED_SYSTEM_USER_TOKEN",
+  "bm_id": "REPLACE_WITH_BUSINESS_MANAGER_ID",
+  "ad_accounts": [
+    {
+      "id": "act_1234567890",
+      "label": "Main store",
+      "currency": "EGP",
+      "timezone": "Africa/Cairo",
+      "is_primary": true
+    },
+    {
+      "id": "act_0987654321",
+      "label": "Retargeting",
+      "currency": "EGP",
+      "timezone": "Africa/Cairo",
+      "is_primary": false
+    }
+  ],
+  "default_currency": "EGP",
+  "default_timezone": "Africa/Cairo",
+  "permissions_granted": [
+    "ads_read",
+    "ads_management",
+    "business_management",
+    "read_insights"
+  ]
+}

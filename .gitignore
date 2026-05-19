@@ -1,0 +1,52 @@
+# --- Secrets and tokens ---
+# Never commit anything with real credentials
+*.local.json
+*-tokens.json
+*-token.json
+*-secret.json
+*-secrets.json
+*.env
+.env
+.env.*
+!.env.example
+
+# Specific config files that hold credentials
+config/meta-tokens.json
+config/telegram-config.json
+**/config/meta-tokens.json
+**/config/telegram-config.json
+**/config/*.local.*
+**/config/*.secret.*
+
+# Extra safety: block any file with "token" or "secret" in the name
+# (still allows *.example.json and the docs)
+*token*.json
+*secret*.json
+!*.example.json
+!*-template.json
+
+# --- Per-brand sensitive data ---
+# By default, exclude all brand folders from the repo.
+# Users will create their own brands/ subfolders locally.
+# Remove this if you want to commit example brand folders.
+brands/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Python / Node (for any skill scripts) ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+
+# --- Output / generated ---
+*.log
+.cache/
+tmp/

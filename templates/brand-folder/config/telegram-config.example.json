@@ -1,0 +1,16 @@
+{
+  "_README": "Copy this file to telegram-config.local.json and fill in real values. The .local.json suffix is gitignored. Never commit the real one.",
+  "bot_token": "REPLACE_WITH_BOT_TOKEN_FROM_BOTFATHER",
+  "chat_id": "REPLACE_WITH_YOUR_CHAT_ID",
+  "schedule": {
+    "_comment": "Cron syntax in the brand's timezone. Examples below — adjust as needed.",
+    "daily_insights": "0 9 * * *",
+    "weekly_report": "0 9 * * MON",
+    "monthly_recap": "0 10 1 * *"
+  },
+  "format": {
+    "language": "en",
+    "include_emojis": true,
+    "max_lines": 8
+  }
+}
