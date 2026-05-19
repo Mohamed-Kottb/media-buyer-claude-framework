@@ -1,0 +1,80 @@
+{
+  "_README": "Rules engine. Copy this file to rules.local.json (gitignored), then edit. Each rule defines a condition + how often to check + what message to send to Telegram. The check_rules.py script reads this and fires Telegram alerts.",
+
+  "_check_types": {
+    "balance_below": "Alert when ad account prepaid balance drops below threshold (in account currency). Re-fires every check_every until balance is topped up.",
+    "balance_zero_or_negative": "Alert when ad account ran out of money (balance <= 0). Re-fires every check_every until topped up.",
+    "insights_summary": "Send the standard insights summary for the last N hours/days.",
+    "roas_below": "Alert when ROAS over the lookback drops below threshold.",
+    "cpa_above": "Alert when CPA over the lookback rises above threshold.",
+    "frequency_above": "Alert when account-level frequency over lookback rises above threshold (creative fatigue).",
+    "no_spend": "Alert when account had zero spend for the entire lookback window."
+  },
+
+  "rules": [
+    {
+      "id": "low-balance-warning",
+      "description": "Warn when balance < 1000 EGP. Repeats hourly until topped up.",
+      "enabled": true,
+      "type": "balance_below",
+      "threshold": 1000,
+      "currency": "EGP",
+      "check_every": "1h",
+      "repeat_until_cleared": true,
+      "message": "⚠️ *{ad_account_label}* balance dropped below {threshold} {currency}. Current: {balance} {currency}. Top up now to avoid pause."
+    },
+
+    {
+      "id": "out-of-money",
+      "description": "Critical: ad account balance is zero or negative — campaigns may already be paused.",
+      "enabled": true,
+      "type": "balance_zero_or_negative",
+      "check_every": "1h",
+      "repeat_until_cleared": true,
+      "message": "🚨 *{ad_account_label}* is OUT OF MONEY (balance: {balance} {currency}). Campaigns likely paused. Top up immediately."
+    },
+
+    {
+      "id": "twice-daily-insights",
+      "description": "Send a performance summary every 12 hours (last 12h window).",
+      "enabled": true,
+      "type": "insights_summary",
+      "lookback": "12h",
+      "check_every": "12h",
+      "message": "📊 *{ad_account_label}* — last 12h\n\n{summary}"
+    },
+
+    {
+      "id": "roas-floor-breach",
+      "description": "Alert if 24h ROAS drops below break-even.",
+      "enabled": false,
+      "type": "roas_below",
+      "threshold": 1.8,
+      "lookback": "24h",
+      "check_every": "4h",
+      "repeat_until_cleared": false,
+      "message": "🔻 *{ad_account_label}* ROAS dropped to {value:.2f}x (below floor {threshold}x) over the last 24h."
+    },
+
+    {
+      "id": "creative-fatigue",
+      "description": "Warn when account-level frequency > 4 (creative fatigue risk).",
+      "enabled": false,
+      "type": "frequency_above",
+      "threshold": 4.0,
+      "lookback": "7d",
+      "check_every": "24h",
+      "message": "🔁 *{ad_account_label}* frequency hit {value:.1f} (7d). Consider creative refresh."
+    },
+
+    {
+      "id": "no-spend-alert",
+      "description": "Alert if no spend recorded today (possible pause / billing issue).",
+      "enabled": false,
+      "type": "no_spend",
+      "lookback": "24h",
+      "check_every": "6h",
+      "message": "⏸  *{ad_account_label}* has zero spend in the last 24h. Check for pauses, depleted budget, or billing issues."
+    }
+  ]
+}
