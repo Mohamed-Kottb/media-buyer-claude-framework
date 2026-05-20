@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --c-blue:      #2563eb;
+      --c-blue-50:   #eff6ff;
+      --c-green:     #10b981;
+      --c-amber:     #f59e0b;
+      --c-red:       #ef4444;
+      --c-violet:    #8b5cf6;
+      --c-cyan:      #06b6d4;
+      --c-pink:      #ec4899;
+      --c-lime:      #84cc16;
+      --c-slate-50:  #f8fafc;
+      --c-slate-100: #f1f5f9;
+      --c-slate-200: #e2e8f0;
+      --c-slate-400: #94a3b8;
+      --c-slate-500: #64748b;
+      --c-slate-700: #334155;
+      --c-slate-900: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    html, body { background: #f6f7fb; color: var(--c-slate-900); font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+    /* Card */
+    .card { background:#fff; border:1px solid var(--c-slate-200); border-radius:14px; padding:1rem 1.15rem; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+    .card-title { display:flex; align-items:center; justify-content:space-between; font-size:.85rem; font-weight:600; color:var(--c-slate-700); margin-bottom:.85rem; }
+    .card-title .meta { font-weight:400; font-size:.7rem; color:var(--c-slate-400); }
+
+    /* KPI card */
+    .kpi { background:#fff; border:1px solid var(--c-slate-200); border-radius:14px; padding:.9rem 1rem; box-shadow:0 1px 2px rgba(15,23,42,.04); display:flex; flex-direction:column; justify-content:space-between; min-height:88px; }
+    .kpi .lbl { font-size:.7rem; letter-spacing:.04em; text-transform:uppercase; color:var(--c-slate-500); font-weight:500; }
+    .kpi-row { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; margin-top:.35rem; }
+    .kpi .val { font-size:1.5rem; line-height:1.1; font-weight:700; color:var(--c-slate-900); font-variant-numeric: tabular-nums; }
+    .kpi .dlt { font-size:.78rem; font-weight:600; padding:.15rem .45rem; border-radius:999px; }
+    .dlt.up   { background:#ecfdf5; color:#047857; }
+    .dlt.dn   { background:#fef2f2; color:#b91c1c; }
+    .dlt.flat { background:var(--c-slate-100); color:var(--c-slate-500); }
+    .dlt.invert.up { background:#fef2f2; color:#b91c1c; }  /* for cost-style: higher = bad */
+    .dlt.invert.dn { background:#ecfdf5; color:#047857; }
+
+    /* Inputs */
+    .input { border:1px solid var(--c-slate-200); border-radius:8px; padding:.4rem .55rem; font-size:.85rem; background:#fff; }
+    .input:focus { outline:none; border-color:var(--c-blue); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+    .btn { padding:.55rem .95rem; background:var(--c-slate-900); color:#fff; border:none; border-radius:9px; font-size:.85rem; font-weight:600; cursor:pointer; transition: opacity .15s; }
+    .btn:hover { opacity:.9; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+
+    .preset { padding:.35rem .75rem; border:1px solid var(--c-slate-200); border-radius:999px; background:#fff; font-size:.78rem; color:var(--c-slate-700); cursor:pointer; font-weight:500; transition: all .15s; }
+    .preset:hover { border-color: var(--c-slate-400); }
+    .preset.active { background:var(--c-slate-900); color:#fff; border-color:var(--c-slate-900); }
+
+    /* Toggle */
+    .toggle { position:relative; display:inline-block; width:38px; height:22px; flex-shrink:0; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .toggle .slider { position:absolute; cursor:pointer; inset:0; background:var(--c-slate-200); border-radius:22px; transition:.18s; }
+    .toggle .slider:before { position:absolute; content:""; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.18s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+    .toggle input:checked + .slider { background:var(--c-blue); }
+    .toggle input:checked + .slider:before { transform: translateX(16px); }
+
+    .compare-off #cmp-group, .compare-off #vs-label { opacity:.4; pointer-events:none; }
+    .compare-off #window-text .vs-part { display:none; }
+    .compare-off .dlt { display:none; }
+
+    /* Table */
+    table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    th, td { padding:.55rem .65rem; text-align:left; border-bottom:1px solid var(--c-slate-100); white-space:nowrap; }
+    th { background:#fafbfc; font-weight:600; color:var(--c-slate-700); font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; position:sticky; top:0; }
+    tr:hover td { background:#fafbfc; }
+    td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+    td.name { max-width:280px; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Charts */
+    canvas { max-height: 280px; }
+
+    /* Funnel */
+    .funnel-row { display:flex; align-items:center; gap:.55rem; margin-bottom:.45rem; }
+    .funnel-row:last-child { margin-bottom:0; }
+    .funnel-bar { height:34px; border-radius:6px; color:#fff; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:600; min-width:32px; transition: width .25s; }
+    .funnel-info { flex:1; display:flex; flex-direction:column; line-height:1.15; }
+    .funnel-info .name { font-size:.78rem; font-weight:600; color:var(--c-slate-900); }
+    .funnel-info .vals { font-size:.7rem; color:var(--c-slate-500); font-variant-numeric:tabular-nums; }
+
+    /* Creative card */
+    .creative { background:#fff; border:1px solid var(--c-slate-200); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; transition: transform .15s, box-shadow .15s; }
+    .creative:hover { transform: translateY(-2px); box-shadow:0 4px 12px rgba(15,23,42,.08); }
+    .creative .thumb { position:relative; aspect-ratio:1/1; background:linear-gradient(135deg,#f1f5f9,#e2e8f0); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .creative .thumb img { width:100%; height:100%; object-fit:cover; }
+    .creative .thumb .badge { position:absolute; top:.5rem; left:.5rem; padding:.15rem .5rem; border-radius:6px; background:rgba(15,23,42,.78); color:#fff; font-size:.65rem; font-weight:600; letter-spacing:.04em; }
+    .creative .meta { padding:.6rem .7rem .7rem; display:flex; flex-direction:column; flex:1; }
+    .creative .ad-name { font-size:.75rem; font-weight:600; color:var(--c-slate-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .creative .cmp-name { font-size:.68rem; color:var(--c-slate-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:.05rem; }
+    .creative .kvs { margin-top:.55rem; display:grid; grid-template-columns:1fr 1fr; gap:.2rem .65rem; font-size:.7rem; }
+    .creative .kvs > div { display:flex; justify-content:space-between; gap:.3rem; min-width:0; }
+    .creative .kvs .k { color:var(--c-slate-500); flex-shrink:0; }
+    .creative .kvs .v { font-weight:600; color:var(--c-slate-900); font-variant-numeric:tabular-nums; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    /* Number coloring (good = green, mid = amber, bad = red) */
+    .v-good   { color:#047857 !important; }
+    .v-mid    { color:#b45309 !important; }
+    .v-bad    { color:#b91c1c !important; }
+    .v-zero   { color:var(--c-slate-400) !important; }
+
+    /* Spinner */
+    .spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation: spin 1s linear infinite; display:inline-block; vertical-align:middle; margin-right:6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Loading overlay (subtle) */
+    .loading #refresh-label::before {}
+  </style>
+</head>
+<body class="p-6">
+  <div class="mx-auto max-w-[1380px]">
+
+    <!-- Header -->
+    <header class="flex flex-wrap items-baseline justify-between mb-5 gap-3">
+      <div>
+        <h1 id="brand-title" class="text-2xl font-bold text-slate-900">Loading…</h1>
+        <p id="window-text" class="text-sm text-slate-500 mt-0.5">—</p>
+      </div>
+      <div id="gen-text" class="text-xs text-slate-400">—</div>
+    </header>
+
+    <!-- Controls -->
+    <div class="card mb-5">
+      <div class="flex flex-wrap items-end gap-3">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1 font-medium">From</label>
+          <input id="since" type="date" class="input" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1 font-medium">To</label>
+          <input id="until" type="date" class="input" />
+        </div>
+
+        <div class="flex items-center gap-2 pb-1 ml-2">
+          <label class="toggle"><input type="checkbox" id="compare-toggle" checked /><span class="slider"></span></label>
+          <span class="text-sm text-slate-600 font-medium">Compare</span>
+        </div>
+
+        <div id="cmp-group" class="flex items-end gap-3">
+          <div id="vs-label" class="text-slate-400 self-end pb-2">vs</div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1 font-medium">Compare From</label>
+            <input id="csince" type="date" class="input" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1 font-medium">Compare To</label>
+            <input id="cuntil" type="date" class="input" />
+          </div>
+        </div>
+
+        <button id="refresh" class="btn ml-auto"><span id="refresh-label">Refresh</span></button>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button class="preset" data-preset="yesterday">Yesterday</button>
+        <button class="preset" data-preset="7d">Last 7 days</button>
+        <button class="preset active" data-preset="30d">Last 30 days</button>
+        <button class="preset" data-preset="90d">Last 90 days</button>
+        <button class="preset" data-preset="mtd">Month to date</button>
+        <button class="preset" data-preset="qtd">Quarter to date</button>
+        <button class="preset" data-preset="ytd">Year to date</button>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5"></div>
+
+    <!-- Row: Performance Over Time + ROAS Over Time + Funnel -->
+    <div class="grid grid-cols-1 lg:grid-cols-6 gap-4 mb-5">
+      <div class="card lg:col-span-3">
+        <div class="card-title">Performance Over Time <span class="meta">Spend · Revenue</span></div>
+        <canvas id="chart-perf"></canvas>
+      </div>
+      <div class="card lg:col-span-2">
+        <div class="card-title">ROAS Over Time</div>
+        <canvas id="chart-roas"></canvas>
+      </div>
+      <div class="card lg:col-span-1">
+        <div class="card-title">Performance Funnel</div>
+        <div id="funnel" class="-mt-1"></div>
+      </div>
+    </div>
+
+    <!-- Row: regions · age/gender · device -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+      <div class="card">
+        <div class="card-title">Top Regions by Purchases</div>
+        <canvas id="chart-regions"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Purchases by Age &amp; Gender</div>
+        <canvas id="chart-age"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Device Breakdown</div>
+        <canvas id="chart-device"></canvas>
+      </div>
+    </div>
+
+    <!-- Row: campaigns table + purchases-vs-cpa -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+      <div class="card lg:col-span-2">
+        <div class="card-title">Campaigns Performance <span class="meta">top 25 by spend</span></div>
+        <div class="overflow-x-auto"><table>
+          <thead><tr>
+            <th>Campaign</th>
+            <th class="num">Spend</th>
+            <th class="num">Revenue</th>
+            <th class="num">ROAS</th>
+            <th class="num">Purch.</th>
+            <th class="num">CPA</th>
+            <th class="num">CTR</th>
+            <th class="num">CPC</th>
+          </tr></thead>
+          <tbody id="tbl-campaigns"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Purchases &amp; Cost per Purchase</div>
+        <canvas id="chart-purch-cpa"></canvas>
+      </div>
+    </div>
+
+    <!-- Row: creatives + placements -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+      <div class="card lg:col-span-2">
+        <div class="card-title">
+          Top Creatives <span id="creatives-count" class="meta"></span>
+          <select id="creatives-sort" class="input ml-auto !py-1 !text-xs">
+            <option value="spend">Sort: Spend</option>
+            <option value="roas">Sort: ROAS</option>
+            <option value="purchases">Sort: Purchases</option>
+            <option value="ctr">Sort: CTR</option>
+            <option value="hook_rate">Sort: Hook rate</option>
+          </select>
+        </div>
+        <div id="creatives-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Placements Performance</div>
+        <canvas id="chart-placements"></canvas>
+      </div>
+    </div>
+
+    <p class="text-center text-xs text-slate-400 mt-8 mb-2">
+      Live · media-buyer-claude-framework
+    </p>
+  </div>
+
+<script>
+  // ───── Helpers ─────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const COLORS = {
+    blue:"#2563eb", green:"#10b981", amber:"#f59e0b", red:"#ef4444",
+    violet:"#8b5cf6", cyan:"#06b6d4", pink:"#ec4899", lime:"#84cc16",
+    slate:"#64748b", sky:"#0ea5e9", purple:"#a855f7", indigo:"#4f46e5"
+  };
+  const PALETTE = [COLORS.blue, COLORS.green, COLORS.amber, COLORS.red, COLORS.violet, COLORS.cyan, COLORS.pink, COLORS.lime, COLORS.slate, COLORS.sky, COLORS.purple];
+  Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = "#475569";
+  Chart.defaults.responsive = true;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxWidth = 8;
+
+  let CUR = "";
+  const charts = {};
+
+  const params = new URLSearchParams(window.location.search);
+  const BRAND = params.get("brand") || "";
+  if (!BRAND) { alert("Pass ?brand=<folder> in the URL."); }
+
+  // ───── State persistence ────────────────────────────────────────────
+  // Saves the user's selections to localStorage + URL params so refresh
+  // (or a shared link) restores the same view instead of bouncing back
+  // to "Last 30 days".
+  const STATE_KEY = "mbcf_dash_state_" + BRAND;
+
+  function readSaved() {
+    // 1. URL params take priority (so a shared link wins).
+    const url = new URLSearchParams(window.location.search);
+    const fromUrl = {
+      since:   url.get("since"),
+      until:   url.get("until"),
+      csince:  url.get("csince"),
+      cuntil:  url.get("cuntil"),
+      compare: url.get("compare"),           // "true" / "false"
+      preset:  url.get("preset"),            // "30d" / null
+      sort:    url.get("sort"),
+    };
+    if (fromUrl.since && fromUrl.until) return fromUrl;
+
+    // 2. Fall back to localStorage.
+    try {
+      const raw = localStorage.getItem(STATE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  function saveState() {
+    const state = {
+      since:   $("since").value,
+      until:   $("until").value,
+      csince:  $("csince").value,
+      cuntil:  $("cuntil").value,
+      compare: compareOn() ? "true" : "false",
+      preset:  document.querySelector(".preset.active")?.dataset.preset || null,
+      sort:    $("creatives-sort").value,
+    };
+
+    // localStorage
+    try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (_) {}
+
+    // URL — use replaceState so we don't pile up history entries on every refresh.
+    const u = new URL(window.location.href);
+    u.searchParams.set("brand",   BRAND);
+    u.searchParams.set("since",   state.since);
+    u.searchParams.set("until",   state.until);
+    u.searchParams.set("csince",  state.csince || "");
+    u.searchParams.set("cuntil",  state.cuntil || "");
+    u.searchParams.set("compare", state.compare);
+    if (state.preset) u.searchParams.set("preset", state.preset);
+    else              u.searchParams.delete("preset");
+    if (state.sort)   u.searchParams.set("sort", state.sort);
+    window.history.replaceState({}, "", u.toString());
+  }
+
+  function ymd(d) { return d.toISOString().slice(0,10); }
+  function addDays(date, n) { const d = new Date(date); d.setUTCDate(d.getUTCDate() + n); return d; }
+  function diffDays(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+  function fmtMoney(v) {
+    if (v == null || isNaN(v)) return "—";
+    if (v >= 1_000_000) return (v/1_000_000).toFixed(2)+"M "+CUR;
+    if (v >= 10_000)    return Math.round(v).toLocaleString()+" "+CUR;
+    return v.toLocaleString(undefined,{maximumFractionDigits:2})+" "+CUR;
+  }
+  // Compact money for tight spaces (cards) — no decimals over 100, K for thousands.
+  function fmtMoneyShort(v) {
+    if (v == null || isNaN(v)) return "—";
+    if (v >= 1_000_000) return (v/1_000_000).toFixed(1)+"M "+CUR;
+    if (v >= 1_000)     return (v/1_000).toFixed(v >= 10_000 ? 0 : 1)+"K "+CUR;
+    if (v >= 100)       return Math.round(v)+" "+CUR;
+    return v.toFixed(1)+" "+CUR;
+  }
+  function fmtInt(v) { return v == null ? "—" : Math.round(v).toLocaleString(); }
+  function fmtIntShort(v) {
+    if (v == null) return "—";
+    const n = Math.round(v);
+    if (n >= 1_000_000) return (n/1_000_000).toFixed(1)+"M";
+    if (n >= 1_000)     return (n/1_000).toFixed(n >= 10_000 ? 0 : 1)+"K";
+    return n.toLocaleString();
+  }
+
+  // ───── Number color thresholds ───────────────────────────────────────
+  // Quick eye-glance coloring. Defaults are general media-buying conventions.
+  // Per-brand benchmarks can override these later via brand config.
+  function grade(metric, value) {
+    if (value == null || isNaN(value) || value === 0) return "v-zero";
+    switch (metric) {
+      case "roas": // higher is better
+        if (value >= 3)   return "v-good";
+        if (value >= 1.8) return "v-mid";
+        return "v-bad";
+      case "ctr": // higher better
+        if (value >= 2)   return "v-good";
+        if (value >= 1)   return "v-mid";
+        return "v-bad";
+      case "hook": // higher better (%)
+        if (value >= 30)  return "v-good";
+        if (value >= 15)  return "v-mid";
+        return "v-bad";
+      case "cpa": // lower better — need a brand-relative threshold; just neutral coloring
+        return "";
+      case "cpc": // lower better — neutral
+        return "";
+      case "frequency": // lower better (within reason)
+        if (value <= 2.5) return "v-good";
+        if (value <= 4)   return "v-mid";
+        return "v-bad";
+      default: return "";
+    }
+  }
+  function pctChange(c, p) { if (!p) return null; return (c - p) / p * 100; }
+  function delta(c, p, invert=false) {
+    const d = pctChange(c, p);
+    if (d === null) return "";
+    const sign = d > 0 ? "▲" : d < 0 ? "▼" : "▬";
+    const cls  = d > 0 ? "up"  : d < 0 ? "dn"  : "flat";
+    return `<span class="dlt ${invert ? 'invert ' : ''}${cls}">${sign}${Math.abs(d).toFixed(0)}%</span>`;
+  }
+  function compareOn() { return $("compare-toggle").checked; }
+
+  // ───── Presets ─────────────────────────────────────────────────────────
+  function setPreset(name) {
+    document.querySelectorAll(".preset").forEach(b => b.classList.toggle("active", b.dataset.preset === name));
+    const today = new Date();
+    today.setUTCHours(0,0,0,0);
+    let since, until = today;
+    switch (name) {
+      case "yesterday": { const y = addDays(today, -1); since = y; until = y; break; }
+      case "7d":  since = addDays(today, -6); break;
+      case "30d": since = addDays(today, -29); break;
+      case "90d": since = addDays(today, -89); break;
+      case "mtd": since = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)); break;
+      case "qtd": { const q = Math.floor(today.getUTCMonth() / 3) * 3; since = new Date(Date.UTC(today.getUTCFullYear(), q, 1)); break; }
+      case "ytd": since = new Date(Date.UTC(today.getUTCFullYear(), 0, 1)); break;
+      default: since = addDays(today, -29);
+    }
+    $("since").value = ymd(since);
+    $("until").value = ymd(until);
+    autoCompare();
+  }
+  function autoCompare() {
+    const since = new Date($("since").value);
+    const until = new Date($("until").value);
+    if (isNaN(since) || isNaN(until) || until < since) return;
+    const len = diffDays(since, until) + 1;
+    const c_until = addDays(since, -1);
+    const c_since = addDays(c_until, -(len - 1));
+    $("csince").value = ymd(c_since);
+    $("cuntil").value = ymd(c_until);
+  }
+
+  // ───── Fetch + render ────────────────────────────────────────────────
+  async function refresh() {
+    const sin = $("since").value, un = $("until").value;
+    const cs  = $("csince").value, cu = $("cuntil").value;
+    if (!sin || !un) return;
+    const btn = $("refresh-label");
+    const refreshBtn = $("refresh");
+    btn.innerHTML = '<span class="spinner"></span>Loading…';
+    refreshBtn.disabled = true;
+    try {
+      const cmp = compareOn() ? `&compare_since=${cs}&compare_until=${cu}` : "&compare=false";
+      const url = `/api/data?brand=${encodeURIComponent(BRAND)}&since=${sin}&until=${un}${cmp}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`HTTP ${res.status}: ${t.slice(0,200)}`);
+      }
+      render(await res.json());
+    } catch (err) {
+      alert("Failed to load data: " + err.message);
+    } finally {
+      btn.textContent = "Refresh";
+      refreshBtn.disabled = false;
+    }
+  }
+
+  function kpi(label, value, ch) {
+    return `<div class="kpi">
+      <div class="lbl">${label}</div>
+      <div class="kpi-row"><div class="val">${value}</div>${ch}</div>
+    </div>`;
+  }
+
+  function render(d) {
+    CUR = d.currency || "";
+    document.body.classList.toggle("compare-off", !compareOn());
+    $("brand-title").textContent = d.brand + (d.ad_account_label ? " · " + d.ad_account_label : "");
+    const vsPart = compareOn() ? `<span class="vs-part">  vs  ${d.compare_since} → ${d.compare_until}</span>` : "";
+    $("window-text").innerHTML = `${d.since} → ${d.until}${vsPart}`;
+    $("gen-text").textContent = "Generated " + d.generated_at;
+
+    const c = d.curr, p = compareOn() ? d.prev : {};
+    $("kpis").innerHTML = [
+      kpi("Amount spent", fmtMoney(c.spend), delta(c.spend, p.spend, true)),
+      kpi("Purchases value", fmtMoney(c.purchase_value), delta(c.purchase_value, p.purchase_value)),
+      kpi("ROAS", c.roas.toFixed(2)+"x", delta(c.roas, p.roas)),
+      kpi("Cost per purchase", fmtMoney(c.cpa), delta(c.cpa, p.cpa, true)),
+      kpi("Purchases", fmtInt(c.purchases), delta(c.purchases, p.purchases)),
+      kpi("CTR (all)", c.ctr.toFixed(2)+"%", delta(c.ctr, p.ctr)),
+      kpi("CPC (all)", fmtMoney(c.cpc), delta(c.cpc, p.cpc, true)),
+    ].join("");
+
+    renderPerf(d.daily);
+    renderRoasOverTime(d.daily);
+    renderPurchCpa(d.daily);
+    renderFunnel(c);
+    renderRegions(d.regions);
+    renderAge(d.age_gender);
+    renderDevices(d.devices);
+    renderPlacements(d.placements);
+    renderCampaigns(d.campaigns);
+    window.__creatives = d.creatives || [];
+    renderCreatives();
+  }
+
+  function chartReplace(id, config) {
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(document.getElementById(id), config);
+  }
+
+  function renderPerf(daily) {
+    const labels = daily.map(r => r.date);
+    chartReplace("chart-perf", {
+      type:"line",
+      data:{ labels, datasets:[
+        { label:"Spend",   data: daily.map(r=>r.spend),          borderColor:COLORS.blue,  backgroundColor:COLORS.blue+"22",  tension:.35, fill:true, pointRadius:0, borderWidth:2 },
+        { label:"Revenue", data: daily.map(r=>r.purchase_value), borderColor:COLORS.green, backgroundColor:COLORS.green+"22", tension:.35, fill:true, pointRadius:0, borderWidth:2 },
+      ]},
+      options:{
+        interaction:{mode:"index",intersect:false},
+        scales:{ y: { ticks:{ callback:v=>fmtMoney(v) } }, x: { grid:{display:false} } },
+        plugins:{ legend:{ align:"end" } }
+      }
+    });
+  }
+
+  function renderRoasOverTime(daily) {
+    const labels = daily.map(r => r.date);
+    chartReplace("chart-roas", {
+      type:"line",
+      data:{ labels, datasets:[
+        { label:"ROAS", data: daily.map(r=>r.roas), borderColor:COLORS.violet, backgroundColor:COLORS.violet+"22", tension:.35, fill:true, pointRadius:0, borderWidth:2 },
+      ]},
+      options:{
+        scales:{ y: { ticks:{ callback:v=>v.toFixed(1)+"x" } }, x: { grid:{display:false} } },
+        plugins:{ legend:{display:false} }
+      }
+    });
+  }
+
+  function renderPurchCpa(daily) {
+    const labels = daily.map(r => r.date);
+    chartReplace("chart-purch-cpa", {
+      type:"line",
+      data:{ labels, datasets:[
+        { label:"Purchases", data: daily.map(r=>r.purchases), borderColor:COLORS.green, backgroundColor:COLORS.green+"22", yAxisID:"y",  tension:.35, fill:true, pointRadius:0, borderWidth:2 },
+        { label:"CPA",       data: daily.map(r=>r.cpa),       borderColor:COLORS.red,   backgroundColor:COLORS.red+"22",   yAxisID:"y1", tension:.35, pointRadius:0, borderWidth:2, borderDash:[4,3] },
+      ]},
+      options:{
+        interaction:{mode:"index",intersect:false},
+        scales:{
+          y:  { position:"left",  ticks:{ callback:v=>fmtInt(v) } },
+          y1: { position:"right", grid:{display:false}, ticks:{ callback:v=>fmtMoney(v) } }
+        }
+      }
+    });
+  }
+
+  // Funnel: tapered bars on the LEFT, label + numbers on the RIGHT.
+  // This way long region names / big numbers always fit, even in a narrow column.
+  function renderFunnel(c) {
+    const stages = [
+      { label:"Impressions", val: c.impressions, color: COLORS.blue   },
+      { label:"Clicks",      val: c.clicks,      color: COLORS.violet },
+      { label:"Add to Cart", val: c.add_to_cart, color: COLORS.amber  },
+      { label:"Purchases",   val: c.purchases,   color: COLORS.green  },
+    ];
+    const max = stages[0].val || 1;
+    const prev = stages.map((s,i) => i === 0 ? null : stages[i-1].val);
+
+    $("funnel").innerHTML = stages.map((s, i) => {
+      const widthPct  = Math.max(8, (s.val / max) * 55); // bar uses up to 55% of card width
+      const pctOfTop  = i === 0 ? 100 : (max ? (s.val / max * 100) : 0);
+      const pctOfPrev = i === 0 ? null : (prev[i] ? (s.val / prev[i] * 100) : 0);
+      const subtext   = i === 0
+        ? "100% of top"
+        : `${pctOfTop.toFixed(2)}% top · ${pctOfPrev.toFixed(2)}% step`;
+      return `
+        <div class="funnel-row">
+          <div class="funnel-bar" style="width:${widthPct}%; background:${s.color};">${fmtIntShort(s.val)}</div>
+          <div class="funnel-info">
+            <span class="name">${s.label}</span>
+            <span class="vals">${subtext}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderRegions(r) {
+    // Meta returns regions even where there were 0 purchases. If purchases are
+    // all 0, fall back to spend so the chart actually has something to draw.
+    const totalPurch = r.reduce((s, x) => s + (x.purchases || 0), 0);
+    const totalSpend = r.reduce((s, x) => s + (x.spend     || 0), 0);
+    const metricKey  = totalPurch > 0 ? "purchases" : "spend";
+    const metricName = totalPurch > 0 ? "Purchases" : "Spend";
+
+    // Sort and drop zero rows so the donut doesn't have invisible slices.
+    const data = r.map(x => ({ label: x.label || "—", val: x[metricKey] || 0, purch: x.purchases || 0, spend: x.spend || 0 }))
+                  .filter(x => x.val > 0)
+                  .sort((a,b) => b.val - a.val)
+                  .slice(0, 8);
+
+    // Update card subtitle to make it obvious which metric we're showing.
+    const titleEl = $("chart-regions").closest(".card").querySelector(".card-title");
+    if (titleEl && !titleEl.querySelector(".meta")) {
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      titleEl.appendChild(meta);
+    }
+    const metaEl = titleEl ? titleEl.querySelector(".meta") : null;
+    if (metaEl) metaEl.textContent = `by ${metricName.toLowerCase()}`;
+
+    if (!data.length || (totalPurch === 0 && totalSpend === 0)) {
+      // Replace canvas with a "no data" message
+      const card = $("chart-regions").closest(".card");
+      // Re-create canvas if previously replaced
+      if (!card.querySelector("canvas")) {
+        const c = document.createElement("canvas");
+        c.id = "chart-regions";
+        card.appendChild(c);
+      }
+      if (charts["chart-regions"]) { charts["chart-regions"].destroy(); delete charts["chart-regions"]; }
+      $("chart-regions").outerHTML = `<div id="chart-regions" class="text-center text-slate-400 py-10 text-sm">No data in this window.</div>`;
+      return;
+    }
+
+    // Ensure canvas exists (in case we replaced it with the no-data div before)
+    if ($("chart-regions").tagName !== "CANVAS") {
+      const card = $("chart-regions").closest(".card");
+      $("chart-regions").remove();
+      const c = document.createElement("canvas");
+      c.id = "chart-regions";
+      card.appendChild(c);
+    }
+
+    chartReplace("chart-regions", {
+      type:"doughnut",
+      data:{
+        labels: data.map(x => x.label),
+        datasets:[{ data: data.map(x => x.val), backgroundColor: PALETTE, borderWidth: 0 }]
+      },
+      options:{
+        cutout:"55%",
+        plugins:{
+          legend:{ position:"bottom", labels:{ boxWidth:8, padding:8, font:{size:11} } },
+          tooltip:{
+            callbacks:{
+              label: (ctx) => {
+                const d = data[ctx.dataIndex];
+                const pct = (d.val / data.reduce((s,x)=>s+x.val,0) * 100).toFixed(1);
+                return [
+                  `${d.label}: ${metricKey === "spend" ? fmtMoney(d.val) : fmtInt(d.val)} (${pct}%)`,
+                  `Spend: ${fmtMoney(d.spend)}`,
+                  `Purchases: ${fmtInt(d.purch)}`,
+                ];
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderAge(ag) {
+    chartReplace("chart-age", {
+      type:"bar",
+      data:{ labels: ag.ages, datasets:[
+        { label:"Male",   data: ag.male,   backgroundColor:COLORS.blue,  borderRadius:4 },
+        { label:"Female", data: ag.female, backgroundColor:COLORS.pink,  borderRadius:4 },
+      ]},
+      options:{
+        plugins:{ legend:{ align:"end" }, tooltip:{ callbacks:{ label:c=>c.dataset.label+": "+fmtInt(c.parsed.y) } } },
+        scales:{ y:{ticks:{callback:v=>fmtInt(v)}}, x:{grid:{display:false}} }
+      }
+    });
+  }
+
+  function renderDevices(dv) {
+    chartReplace("chart-device", {
+      type:"doughnut",
+      data:{ labels: dv.map(x=>x.label), datasets:[{ data: dv.map(x=>x.purchases), backgroundColor:[COLORS.blue, COLORS.violet, COLORS.amber], borderWidth:0 }] },
+      options:{ cutout:"55%", plugins:{ legend:{position:"right", labels:{boxWidth:8, padding:6}} } }
+    });
+  }
+
+  function renderPlacements(p) {
+    chartReplace("chart-placements", {
+      type:"bar",
+      data:{ labels: p.map(x=>x.label), datasets:[
+        { label:"Spend",   data: p.map(x=>x.spend),          backgroundColor:COLORS.blue,  borderRadius:4 },
+        { label:"Revenue", data: p.map(x=>x.purchase_value), backgroundColor:COLORS.green, borderRadius:4 },
+      ]},
+      options:{ plugins:{ legend:{ align:"end" } }, scales:{ y:{ticks:{callback:v=>fmtMoney(v)}}, x:{grid:{display:false}} } }
+    });
+  }
+
+  function renderCampaigns(rows) {
+    const tbody = $("tbl-campaigns");
+    tbody.innerHTML = rows.length ? rows.map(c => `
+      <tr>
+        <td class="name" title="${(c.name||'').replace(/"/g,'&quot;')}">${c.name || c.id || "—"}</td>
+        <td class="num">${fmtMoney(c.spend)}</td>
+        <td class="num">${fmtMoney(c.purchase_value)}</td>
+        <td class="num"><span class="${grade('roas', c.roas)}">${c.roas.toFixed(2)}x</span></td>
+        <td class="num">${fmtInt(c.purchases)}</td>
+        <td class="num">${c.cpa ? fmtMoney(c.cpa) : "—"}</td>
+        <td class="num"><span class="${grade('ctr', c.ctr)}">${c.ctr.toFixed(2)}%</span></td>
+        <td class="num">${c.cpc ? fmtMoney(c.cpc) : "—"}</td>
+      </tr>
+    `).join("") : `<tr><td colspan="8" class="text-center text-slate-400 py-6">No campaigns in this window.</td></tr>`;
+  }
+
+  function renderCreatives() {
+    const sortKey = $("creatives-sort").value;
+    const rows = (window.__creatives || []).slice().sort((a,b) => (b[sortKey] || 0) - (a[sortKey] || 0));
+    $("creatives-count").textContent = rows.length ? `(${rows.length})` : "";
+    const grid = $("creatives-grid");
+    if (!rows.length) {
+      grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-8">No creatives in this window.</div>`;
+      return;
+    }
+    grid.innerHTML = rows.map(c => {
+      const thumb = c.thumbnail
+        ? `<img src="${c.thumbnail}" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'text-slate-400 text-xs',textContent:'no preview'}))" />`
+        : `<span class="text-slate-400 text-xs">${(c.creative_type || "?").toLowerCase()}</span>`;
+      const badge = c.creative_type === "VIDEO" ? '<span class="badge">VIDEO</span>'
+                  : c.creative_type === "PHOTO" ? '<span class="badge">IMAGE</span>' : "";
+      return `
+        <div class="creative">
+          <div class="thumb">${thumb}${badge}</div>
+          <div class="meta">
+            <div class="ad-name" title="${(c.ad_name || "").replace(/"/g,'&quot;')}">${c.ad_name || "Unnamed"}</div>
+            <div class="cmp-name" title="${(c.campaign_name || "").replace(/"/g,'&quot;')}">${c.campaign_name || ""}</div>
+            <div class="kvs">
+              <div><span class="k">ROAS</span> <span class="v ${grade('roas', c.roas)}">${(c.roas || 0).toFixed(2)}x</span></div>
+              <div><span class="k">CTR</span>  <span class="v ${grade('ctr',  c.ctr)}">${(c.ctr  || 0).toFixed(2)}%</span></div>
+              <div><span class="k">Purch</span><span class="v">${fmtInt(c.purchases)}</span></div>
+              <div><span class="k">Spend</span><span class="v">${fmtMoneyShort(c.spend)}</span></div>
+              ${c.hook_rate > 0 ? `<div style="grid-column:1 / -1;"><span class="k">Hook (3s)</span><span class="v ${grade('hook', c.hook_rate)}">${c.hook_rate.toFixed(0)}%</span></div>` : ""}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // ───── Wire up controls ──────────────────────────────────────────────
+  document.querySelectorAll(".preset").forEach(b => b.addEventListener("click", () => { setPreset(b.dataset.preset); saveState(); refresh(); }));
+  // Manual date edits → clear preset highlight (user is going custom)
+  ["since","until"].forEach(id => $(id).addEventListener("change", () => {
+    document.querySelectorAll(".preset").forEach(b => b.classList.remove("active"));
+    autoCompare();
+    saveState();
+  }));
+  ["csince","cuntil"].forEach(id => $(id).addEventListener("change", saveState));
+  $("refresh").addEventListener("click", () => { saveState(); refresh(); });
+  $("compare-toggle").addEventListener("change", () => {
+    document.body.classList.toggle("compare-off", !compareOn());
+    saveState();
+    refresh();
+  });
+  $("creatives-sort").addEventListener("change", () => { saveState(); renderCreatives(); });
+
+  // ───── Initial load: restore prior view, or default to Last 30 days ────
+  (function init() {
+    const saved = readSaved();
+    if (saved && saved.since && saved.until) {
+      $("since").value  = saved.since;
+      $("until").value  = saved.until;
+      $("csince").value = saved.csince || "";
+      $("cuntil").value = saved.cuntil || "";
+      $("compare-toggle").checked = (saved.compare !== "false");
+      document.body.classList.toggle("compare-off", !compareOn());
+      if (saved.sort) $("creatives-sort").value = saved.sort;
+      // Highlight preset if it matches what was saved
+      if (saved.preset) {
+        document.querySelectorAll(".preset").forEach(b => b.classList.toggle("active", b.dataset.preset === saved.preset));
+      } else {
+        document.querySelectorAll(".preset").forEach(b => b.classList.remove("active"));
+      }
+      // Make sure compare dates exist if compare is on and they're blank.
+      if (compareOn() && (!$("csince").value || !$("cuntil").value)) autoCompare();
+    } else {
+      setPreset("30d");
+    }
+    refresh();
+  })();
+</script>
+</body>
+</html>
